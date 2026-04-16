@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Email Spam Detector - COMP264 Group 7</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    color: #2d3748;
+  }
+  .container {
+    background: #fff;
+    border-radius: 16px;
+    padding: 40px;
+    max-width: 720px;
+    width: 100%;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  }
+  header { text-align: center; margin-bottom: 24px; }
+  header h1 { font-size: 28px; color: #2d3748; margin-bottom: 8px; }
+  header p { color: #718096; font-size: 14px; }
+  .badge {
+    display: inline-block;
+    background: #edf2f7;
+    color: #4a5568;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    margin-top: 8px;
+  }
+  .endpoint-row {
+    margin: 20px 0;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .endpoint-row label { font-size: 13px; color: #4a5568; min-width: 90px; }
+  .endpoint-row input {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 13px;
+    font-family: monospace;
+  }
+  textarea {
+    width: 100%;
+    min-height: 180px;
+    padding: 16px;
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
+    font-size: 15px;
+    resize: vertical;
+    font-family: inherit;
+    transition: border-color 0.2s;
+  }
+  textarea:focus { outline: none; border-color: #667eea; }
+  .actions {
+    margin-top: 16px;
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  button {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: #fff;
+    border: none;
+    padding: 12px 28px;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.1s, box-shadow 0.2s;
+  }
+  button:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(102,126,234,0.35); }
+  button:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+  button.secondary {
+    background: #edf2f7;
+    color: #2d3748;
+  }
+  button.sample {
+    background: #f7fafc;
+    color: #4a5568;
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 500;
+    border: 1px solid #e2e8f0;
+  }
+  .samples { margin-top: 14px; }
+  .samples-title { font-size: 12px; color: #718096; margin-bottom: 6px; }
+  .result {
+    margin-top: 24px;
+    padding: 20px;
+    border-radius: 12px;
+    display: none;
+  }
+  .result.show { display: block; }
+  .result.ham { background: #f0fff4; border: 2px solid #48bb78; }
+  .result.spam { background: #fff5f5; border: 2px solid #f56565; }
+  .result.error { background: #fffaf0; border: 2px solid #ed8936; }
+  .result-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .result-label {
+    font-size: 22px;
+    font-weight: 700;
+  }
+  .ham .result-label { color: #22543d; }
+  .spam .result-label { color: #742a2a; }
+  .error .result-label { color: #7b341e; }
+  .confidence-bar {
+    width: 100%;
+    height: 10px;
+    background: #edf2f7;
+    border-radius: 6px;
+    overflow: hidden;
+    margin: 8px 0;
+  }
+  .confidence-fill {
+    height: 100%;
+    transition: width 0.4s ease;
+  }
+  .ham .confidence-fill { background: #48bb78; }
+  .spam .confidence-fill { background: #f56565; }
+  .probs {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    color: #4a5568;
+  }
+  footer {
+    margin-top: 28px;
+    text-align: center;
+    color: #a0aec0;
+    font-size: 12px;
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <h1>Email Spam Detector</h1>
+    <p>Multinomial Naive Bayes + TF-IDF, deployed on AWS SageMaker</p>
+    <span class="badge">COMP264 Cloud ML - Group 7</span>
+  </header>
+
+  <div class="endpoint-row">
+    <label for="apiUrl">API URL:</label>
+    <input id="apiUrl" type="text"
+      placeholder="https://YOUR-API-ID.execute-api.us-east-1.amazonaws.com/prod/predict"
+      value="" />
+  </div>
+
+  <textarea id="emailText"
+    placeholder="Paste an email body here and click 'Check Spam'..."></textarea>
+
+  <div class="actions">
+    <button id="checkBtn" onclick="checkSpam()">Check Spam</button>
+    <button class="secondary" onclick="clearAll()">Clear</button>
+  </div>
+
+  <div class="samples">
+    <div class="samples-title">Try a sample:</div>
+    <button class="sample" onclick="loadSample(0)">Meeting notes (ham)</button>
+    <button class="sample" onclick="loadSample(1)">Free iPhone (spam)</button>
+    <button class="sample" onclick="loadSample(2)">Account alert (spam)</button>
+    <button class="sample" onclick="loadSample(3)">Casual email (ham)</button>
+  </div>
+
+  <div id="result" class="result">
+    <div class="result-header">
+      <span class="result-label" id="resultLabel"></span>
+      <span id="resultConfidence"></span>
+    </div>
+    <div class="confidence-bar">
+      <div class="confidence-fill" id="confidenceFill"></div>
+    </div>
+    <div class="probs">
+      <span>Ham: <b id="hamProb">0%</b></span>
+      <span>Spam: <b id="spamProb">0%</b></span>
+    </div>
+  </div>
+
+  <footer>
+    Built for COMP264 Cloud Machine Learning &bull; Centennial College &bull; 2026
+  </footer>
+</div>
+
+<script>
+  const SAMPLES = [
+    "Hi team, please find attached the minutes from yesterday's meeting. Let me know if you have any questions before we finalize the notes.",
+    "CONGRATULATIONS!!! You have WON a FREE iPhone 15 Pro! Click this link NOW to claim your prize before it expires. Limited offer!",
+    "Your account has been compromised. Verify your password immediately by clicking the link below or your account will be suspended.",
+    "Hey, are we still on for coffee on Saturday? Let me know what time works best for you. Looking forward to catching up!"
+  ];
+
+  function loadSample(i) {
+    document.getElementById('emailText').value = SAMPLES[i];
+  }
+
+  function clearAll() {
+    document.getElementById('emailText').value = '';
+    document.getElementById('result').classList.remove('show', 'ham', 'spam', 'error');
+  }
+
+  async function checkSpam() {
+    const text = document.getElementById('emailText').value.trim();
+    const apiUrl = document.getElementById('apiUrl').value.trim();
+    const btn = document.getElementById('checkBtn');
+    const resultEl = document.getElementById('result');
+
+    if (!text) {
+      alert('Please paste an email body first.');
+      return;
+    }
+    if (!apiUrl) {
+      alert('Please enter the API Gateway URL first.');
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Analyzing...';
+    resultEl.classList.remove('show', 'ham', 'spam', 'error');
+
+    try {
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Request failed');
+      renderResult(data);
+    } catch (err) {
+      renderError(err.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Check Spam';
+    }
+  }
+
+  function renderResult(data) {
+    const resultEl = document.getElementById('result');
+    const label = data.prediction.toUpperCase();
+    const spam = Math.round(data.spam_probability * 100);
+    const ham = Math.round(data.ham_probability * 100);
+    const confidence = data.prediction === 'spam' ? spam : ham;
+
+    document.getElementById('resultLabel').textContent =
+      data.prediction === 'spam' ? 'Spam Detected' : 'Looks Clean (Ham)';
+    document.getElementById('resultConfidence').textContent = `${confidence}% confidence`;
+    document.getElementById('confidenceFill').style.width = `${confidence}%`;
+    document.getElementById('hamProb').textContent = `${ham}%`;
+    document.getElementById('spamProb').textContent = `${spam}%`;
+
+    resultEl.classList.remove('ham', 'spam', 'error');
+    resultEl.classList.add('show', data.prediction === 'spam' ? 'spam' : 'ham');
+  }
+
+  function renderError(msg) {
+    const resultEl = document.getElementById('result');
+    document.getElementById('resultLabel').textContent = 'Error: ' + msg;
+    document.getElementById('resultConfidence').textContent = '';
+    document.getElementById('confidenceFill').style.width = '0%';
+    document.getElementById('hamProb').textContent = '--';
+    document.getElementById('spamProb').textContent = '--';
+    resultEl.classList.remove('ham', 'spam');
+    resultEl.classList.add('show', 'error');
+  }
+</script>
+</body>
+</html>
