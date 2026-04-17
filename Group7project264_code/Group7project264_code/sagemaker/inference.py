@@ -20,6 +20,13 @@ MODEL_FILENAME = "spam_pipeline.joblib"
 LABEL_MAP = {0: "ham", 1: "spam"}
 
 
+def _is_json_content_type(content_type):
+    """Return True for JSON media types, including charset-suffixed values."""
+    if not content_type:
+        return False
+    return str(content_type).split(";", 1)[0].strip().lower() == "application/json"
+
+
 def model_fn(model_dir):
     """Load the trained pipeline from the SageMaker model directory."""
     model_path = os.path.join(model_dir, MODEL_FILENAME)
@@ -33,8 +40,11 @@ def input_fn(request_body, request_content_type="application/json"):
         {"text": "single email string"}
         {"texts": ["email 1", "email 2", ...]}
     """
-    if request_content_type != "application/json":
+    if not _is_json_content_type(request_content_type):
         raise ValueError(f"Unsupported content type: {request_content_type}")
+
+    if isinstance(request_body, (bytes, bytearray)):
+        request_body = request_body.decode("utf-8")
 
     payload = json.loads(request_body)
     if "texts" in payload:
@@ -51,18 +61,22 @@ def input_fn(request_body, request_content_type="application/json"):
 
 def predict_fn(texts, model):
     """Return class predictions and probability for the 'spam' class."""
-    preds = model.predict(texts).tolist()
-    probs = model.predict_proba(texts).tolist()  # [[p_ham, p_spam], ...]
+    preds = model.predict(texts)
+    probs = model.predict_proba(texts)  # [[p_ham, p_spam], ...]
 
     results = []
     for text, pred, prob in zip(texts, preds, probs):
+        # Cast numpy types to native python types for json serialization
+        pred_int = int(pred)
+        prob0_float = float(prob[0])
+        prob1_float = float(prob[1])
         results.append(
             {
                 "input": text[:200],
-                "prediction": LABEL_MAP[int(pred)],
-                "label": int(pred),
-                "spam_probability": round(float(prob[1]), 4),
-                "ham_probability": round(float(prob[0]), 4),
+                "prediction": LABEL_MAP[pred_int],
+                "label": pred_int,
+                "spam_probability": round(prob1_float, 4),
+                "ham_probability": round(prob0_float, 4),
             }
         )
     return results
@@ -70,6 +84,6 @@ def predict_fn(texts, model):
 
 def output_fn(prediction, accept="application/json"):
     """Serialize the list of prediction dicts as JSON."""
-    if accept != "application/json":
+    if not _is_json_content_type(accept):
         raise ValueError(f"Unsupported accept type: {accept}")
     return json.dumps({"results": prediction}), accept

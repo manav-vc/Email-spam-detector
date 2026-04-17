@@ -101,7 +101,7 @@ python deploy.py --role-arn "arn:aws:iam::504133793968:role/SageMakerExecutionRo
 
 ### 4.3 Smoke-test the endpoint
 ```powershell
-python invoke_test.py --endpoint spam-detector-endpoint --region us-east-1
+python invoke_test.py --endpoint spam-detector-endpoint --region ca-central-1
 ```
 
 ---
@@ -114,7 +114,7 @@ python invoke_test.py --endpoint spam-detector-endpoint --region us-east-1
 3. Upload `lambda/lambda_function.py` (or paste the code).
 4. Add environment variables:
    * `ENDPOINT_NAME = spam-detector-endpoint`
-   * `REGION = us-east-1`
+   * `REGION = ca-central-1`
 5. Attach the IAM policy in `lambda/iam_policy.json` so the function can
    call `sagemaker:InvokeEndpoint`.
 

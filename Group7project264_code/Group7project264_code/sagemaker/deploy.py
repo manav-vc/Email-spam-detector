@@ -101,6 +101,7 @@ def deploy(model_uri: str, role: str, region: str, endpoint_name: str, instance:
                 "SAGEMAKER_SUBMIT_DIRECTORY": "/opt/ml/model/code",
                 "SAGEMAKER_PROGRAM": "inference.py",
                 "SAGEMAKER_REGION": region,
+                "PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION": "python",
             },
         },
     )

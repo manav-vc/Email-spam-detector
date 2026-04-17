@@ -19,11 +19,12 @@ Response (JSON):
 
 import json
 import os
+import base64
 import boto3
 
 
 ENDPOINT_NAME = os.environ.get("ENDPOINT_NAME", "spam-detector-endpoint")
-REGION = os.environ.get("REGION", "us-east-1")
+REGION = os.environ.get("REGION", "ca-central-1")
 
 runtime = boto3.client("sagemaker-runtime", region_name=REGION)
 
@@ -44,14 +45,30 @@ def _response(status_code: int, body: dict) -> dict:
     }
 
 
+def _http_method(event: dict) -> str:
+    """Support both REST API (v1) and HTTP API (v2) event shapes."""
+    return (
+        event.get("httpMethod")
+        or event.get("requestContext", {}).get("http", {}).get("method")
+        or event.get("requestContext", {}).get("httpMethod")
+        or ""
+    ).upper()
+
+
+def _parse_body(event: dict) -> dict:
+    body_raw = event.get("body") or "{}"
+    if event.get("isBase64Encoded") and isinstance(body_raw, str):
+        body_raw = base64.b64decode(body_raw).decode("utf-8")
+    return json.loads(body_raw) if isinstance(body_raw, str) else body_raw
+
+
 def lambda_handler(event, context):
     # CORS pre-flight
-    if event.get("httpMethod") == "OPTIONS":
+    if _http_method(event) == "OPTIONS":
         return _response(200, {"ok": True})
 
     try:
-        body_raw = event.get("body") or "{}"
-        body = json.loads(body_raw) if isinstance(body_raw, str) else body_raw
+        body = _parse_body(event)
 
         text = body.get("text", "").strip()
         if not text:
